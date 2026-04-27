@@ -9,6 +9,7 @@ const lyricsArtist = document.getElementById('lyricsArtist');
 const lyricsContent = document.getElementById('lyricsContent');
 const recentHistoryList = document.getElementById('recentHistoryList');
 const listenersNowCount = document.getElementById('listenersNowCount');
+const realListenersNow = document.getElementById('realListenersNow');
 
 function resolveImageWithFallbacks(imageSelector, options) {
     const imageElement = document.querySelector(imageSelector);
@@ -75,6 +76,10 @@ const LISTENERS_MAX = 1300;
 const LISTENERS_BASELINE = 950;
 const LISTENERS_UPDATE_INTERVAL_MS = 15 * 60 * 1000;
 const LISTENERS_STATE_STORAGE_KEY = 'duhaBornAgainListenersState';
+const REAL_LISTENERS_OWNER_STORAGE_KEY = 'ebashShowRealCounter';
+const REAL_LISTENERS_NAMESPACE = 'ebash-pravdu-radio';
+const REAL_LISTENERS_KEY = 'online-now';
+const REAL_LISTENERS_REFRESH_INTERVAL_MS = 20 * 1000;
 const PLAYLIST_URL = (window.DUHA_PLAYLIST_URL || '').trim();
 const LYRICS_API_BASE_URL = (window.DUHA_LYRICS_API_BASE_URL || '').trim();
 let playHistoryByFile = loadPlayHistory();
@@ -88,6 +93,107 @@ let trackFailureInProgress = false;
 let nextTrackInProgress = false;
 let renderedTrackKey = '';
 let simulatedListenersNow = null;
+let realListenersOwnerMode = false;
+let realPresenceRegistered = false;
+
+function updateRealListenersPresence(amount) {
+    const endpoint = `https://api.countapi.xyz/update/${encodeURIComponent(REAL_LISTENERS_NAMESPACE)}/${encodeURIComponent(REAL_LISTENERS_KEY)}?amount=${amount}`;
+
+    fetch(endpoint, {
+        cache: 'no-store',
+        keepalive: true
+    }).catch((error) => {
+        console.warn('Не удалось обновить реальный счетчик присутствия:', error);
+    });
+}
+
+function registerRealListenersPresence() {
+    if (realPresenceRegistered) {
+        return;
+    }
+
+    realPresenceRegistered = true;
+    updateRealListenersPresence(1);
+}
+
+function unregisterRealListenersPresence() {
+    if (!realPresenceRegistered) {
+        return;
+    }
+
+    realPresenceRegistered = false;
+    updateRealListenersPresence(-1);
+}
+
+function resolveRealListenersOwnerMode() {
+    const params = new URLSearchParams(window.location.search);
+    const queryValue = params.get('real');
+
+    if (queryValue === '1') {
+        localStorage.setItem(REAL_LISTENERS_OWNER_STORAGE_KEY, '1');
+    } else if (queryValue === '0') {
+        localStorage.removeItem(REAL_LISTENERS_OWNER_STORAGE_KEY);
+    }
+
+    return localStorage.getItem(REAL_LISTENERS_OWNER_STORAGE_KEY) === '1';
+}
+
+function renderRealListenersValue(value) {
+    if (!realListenersNow || !realListenersOwnerMode) {
+        return;
+    }
+
+    realListenersNow.hidden = false;
+    realListenersNow.textContent = `реально онлайн на сайте: ${Math.max(0, value)}`;
+}
+
+async function refreshRealListenersValue() {
+    if (!realListenersNow || !realListenersOwnerMode) {
+        return;
+    }
+
+    const endpoint = `https://api.countapi.xyz/get/${encodeURIComponent(REAL_LISTENERS_NAMESPACE)}/${encodeURIComponent(REAL_LISTENERS_KEY)}`;
+
+    try {
+        const response = await fetch(endpoint, { cache: 'no-store' });
+        if (!response.ok) {
+            realListenersNow.textContent = 'реально онлайн на сайте: нет данных';
+            return;
+        }
+
+        const payload = await response.json();
+        const value = Number(payload?.value);
+        if (Number.isFinite(value)) {
+            renderRealListenersValue(value);
+        }
+    } catch (error) {
+        console.warn('Не удалось прочитать реальный счетчик слушателей:', error);
+        realListenersNow.textContent = 'реально онлайн на сайте: нет данных';
+    }
+}
+
+function initRealListenersCounter() {
+    if (!realListenersNow) {
+        return;
+    }
+
+    realListenersOwnerMode = resolveRealListenersOwnerMode();
+    realListenersNow.hidden = !realListenersOwnerMode;
+
+    if (realListenersOwnerMode) {
+        realListenersNow.textContent = 'реально онлайн на сайте: загрузка...';
+    }
+
+    registerRealListenersPresence();
+    refreshRealListenersValue();
+
+    setInterval(() => {
+        refreshRealListenersValue();
+    }, REAL_LISTENERS_REFRESH_INTERVAL_MS);
+
+    window.addEventListener('beforeunload', unregisterRealListenersPresence);
+    window.addEventListener('pagehide', unregisterRealListenersPresence);
+}
 
 const fallbackMusicFiles = [
     'Balu_Brigada_-_Backseat_79753203.mp3',
@@ -1123,6 +1229,8 @@ document.addEventListener('keydown', (e) => {
 });
 
 document.addEventListener('DOMContentLoaded', async () => {
+    initRealListenersCounter();
+
     resolveImageWithFallbacks('.label-photo', {
         containerSelector: '.label-inner',
         fallbackClass: 'photo-fallback',

@@ -163,6 +163,13 @@ html, body {
     font-weight: 700;
 }
 
+.real-listeners-now {
+    margin-bottom: 10px;
+    font-size: 10px;
+    color: rgba(145, 225, 183, 0.9);
+    letter-spacing: 0.3px;
+}
+
 .recent-history-list {
     display: flex;
     flex-direction: column;
@@ -480,6 +487,11 @@ html, body {
     .listeners-now {
         margin-bottom: 8px;
         font-size: 10px;
+    }
+
+    .real-listeners-now {
+        margin-bottom: 7px;
+        font-size: 9px;
     }
 
     .turntable-wrapper {
