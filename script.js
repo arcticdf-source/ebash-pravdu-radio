@@ -851,7 +851,7 @@ function updateUIForCurrentTrack() {
     const current = playlist[currentTrackIndex];
 
     if (!current) {
-        lyricsTitle.textContent = 'Duha® Born Again Radio';
+        lyricsTitle.textContent = 'EBASH-PRAVDU-RADIO®';
         lyricsArtist.textContent = 'Local Playlist';
         lyricsContent.textContent = 'В папке music пока нет поддерживаемых файлов (mp3/wav/ogg/m4a/aac).';
         renderedTrackKey = '';
@@ -1140,18 +1140,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         containerSelector: '.station-brand-badge',
         fallbackClass: 'fallback',
         candidates: [
-            'duha-logo.png',
-            'duha-logo.jpg',
-            'duha-logo.jpeg',
-            'duha-logo.PNG',
-            'duha-logo.JPG',
-            'duha-logo.JPEG',
-            'assets/duha-logo.png',
-            'assets/duha-logo.jpg',
-            'assets/duha-logo.jpeg',
-            'assets/duha-logo.PNG',
-            'assets/duha-logo.JPG',
-            'assets/duha-logo.JPEG'
+            'ebash-logo.png',
+            'ebash-logo.jpg',
+            'ebash-logo.jpeg',
+            'ebash-logo.PNG',
+            'ebash-logo.JPG',
+            'ebash-logo.JPEG',
+            'assets/ebash-logo.png',
+            'assets/ebash-logo.jpg',
+            'assets/ebash-logo.jpeg',
+            'assets/ebash-logo.PNG',
+            'assets/ebash-logo.JPG',
+            'assets/ebash-logo.JPEG'
         ]
     });
 
