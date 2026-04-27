@@ -80,6 +80,10 @@ const REAL_LISTENERS_OWNER_STORAGE_KEY = 'ebashShowRealCounter';
 const REAL_LISTENERS_NAMESPACE = 'ebash-pravdu-radio';
 const REAL_LISTENERS_KEY = 'online-now';
 const REAL_LISTENERS_REFRESH_INTERVAL_MS = 20 * 1000;
+const METRIKA_COUNTER_ID = 108782785;
+const METRIKA_GOAL_PLAY = 'radio_play';
+const METRIKA_GOAL_NEXT = 'radio_next';
+const METRIKA_GOAL_LISTEN_60S = 'radio_listen_60s';
 const PLAYLIST_URL = (window.DUHA_PLAYLIST_URL || '').trim();
 const LYRICS_API_BASE_URL = (window.DUHA_LYRICS_API_BASE_URL || '').trim();
 let playHistoryByFile = loadPlayHistory();
@@ -95,6 +99,46 @@ let renderedTrackKey = '';
 let simulatedListenersNow = null;
 let realListenersOwnerMode = false;
 let realPresenceRegistered = false;
+let listen60GoalTimer = null;
+let listen60GoalSent = false;
+
+function sendMetrikaGoal(goalName, params = {}) {
+    if (typeof window.ym !== 'function') {
+        return;
+    }
+
+    try {
+        window.ym(METRIKA_COUNTER_ID, 'reachGoal', goalName, params);
+    } catch (error) {
+        console.warn(`Не удалось отправить цель Метрики ${goalName}:`, error);
+    }
+}
+
+function cancelListen60GoalTimer() {
+    if (!listen60GoalTimer) {
+        return;
+    }
+
+    clearTimeout(listen60GoalTimer);
+    listen60GoalTimer = null;
+}
+
+function scheduleListen60GoalIfNeeded() {
+    if (listen60GoalSent || listen60GoalTimer || !isPlaying) {
+        return;
+    }
+
+    listen60GoalTimer = setTimeout(() => {
+        listen60GoalTimer = null;
+
+        if (!isPlaying || listen60GoalSent) {
+            return;
+        }
+
+        listen60GoalSent = true;
+        sendMetrikaGoal(METRIKA_GOAL_LISTEN_60S);
+    }, 60 * 1000);
+}
 
 function updateRealListenersPresence(amount) {
     const endpoint = `https://api.countapi.xyz/update/${encodeURIComponent(REAL_LISTENERS_NAMESPACE)}/${encodeURIComponent(REAL_LISTENERS_KEY)}?amount=${amount}`;
@@ -1073,6 +1117,10 @@ async function refreshPlaylist(keepCurrentTrack = true) {
 function play(options = {}) {
     const { fromUserAction = false } = options;
 
+    if (fromUserAction) {
+        sendMetrikaGoal(METRIKA_GOAL_PLAY);
+    }
+
     if (playlist.length === 0) {
         lyricsContent.textContent = 'Плейлист пуст. Добавьте mp3/wav/ogg/m4a/aac в папку music.';
         return;
@@ -1105,6 +1153,7 @@ function togglePlay() {
 
 function onPlay() {
     isPlaying = true;
+    scheduleListen60GoalIfNeeded();
     if (!hasRecordedCurrentTrackPlay) {
         recordCurrentTrackPlay();
         pushCurrentToHistory();
@@ -1120,6 +1169,7 @@ function onPlay() {
 
 function onPause() {
     isPlaying = false;
+    cancelListen60GoalTimer();
     playBtn.style.display = 'flex';
     pauseBtn.style.display = 'none';
     turntable.classList.add('paused');
@@ -1183,7 +1233,10 @@ function onAudioError() {
 async function initPlayer() {
     playBtn.addEventListener('click', () => play({ fromUserAction: true }));
     pauseBtn.addEventListener('click', pause);
-    nextBtn?.addEventListener('click', () => internalNextTrack(true, { fromUserAction: true }));
+    nextBtn?.addEventListener('click', () => {
+        sendMetrikaGoal(METRIKA_GOAL_NEXT);
+        internalNextTrack(true, { fromUserAction: true });
+    });
     turntable.addEventListener('click', togglePlay);
 
     radioStream.addEventListener('play', onPlay);
@@ -1224,6 +1277,7 @@ document.addEventListener('keydown', (e) => {
 
     if (e.code === 'ArrowRight') {
         e.preventDefault();
+        sendMetrikaGoal(METRIKA_GOAL_NEXT);
         internalNextTrack(true, { fromUserAction: true });
     }
 });
