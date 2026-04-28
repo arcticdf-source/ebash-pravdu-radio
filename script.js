@@ -211,7 +211,8 @@ function getLocalRealListenersFallbackCount() {
 }
 
 function updateRealListenersPresence(amount) {
-    const endpoint = `https://api.countapi.xyz/update/${encodeURIComponent(REAL_LISTENERS_NAMESPACE)}/${encodeURIComponent(REAL_LISTENERS_KEY)}?amount=${amount}`;
+    const direction = amount >= 0 ? 'up' : 'down';
+    const endpoint = `https://api.counterapi.dev/v1/${encodeURIComponent(REAL_LISTENERS_NAMESPACE)}/${encodeURIComponent(REAL_LISTENERS_KEY)}/${direction}`;
 
     fetch(endpoint, {
         cache: 'no-store',
@@ -268,7 +269,7 @@ async function refreshRealListenersValue() {
         return;
     }
 
-    const endpoint = `https://api.countapi.xyz/get/${encodeURIComponent(REAL_LISTENERS_NAMESPACE)}/${encodeURIComponent(REAL_LISTENERS_KEY)}`;
+    const endpoint = `https://api.counterapi.dev/v1/${encodeURIComponent(REAL_LISTENERS_NAMESPACE)}/${encodeURIComponent(REAL_LISTENERS_KEY)}`;
 
     try {
         const response = await fetch(endpoint, { cache: 'no-store' });
@@ -279,7 +280,7 @@ async function refreshRealListenersValue() {
         }
 
         const payload = await response.json();
-        const value = Number(payload?.value);
+        const value = Number(payload?.count);
         if (Number.isFinite(value)) {
             renderRealListenersValue(value);
             return;
