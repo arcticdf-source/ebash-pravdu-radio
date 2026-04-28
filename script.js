@@ -80,6 +80,9 @@ const REAL_LISTENERS_OWNER_STORAGE_KEY = 'ebashShowRealCounter';
 const REAL_LISTENERS_NAMESPACE = 'ebash-pravdu-radio';
 const REAL_LISTENERS_KEY = 'online-now';
 const REAL_LISTENERS_REFRESH_INTERVAL_MS = 20 * 1000;
+const REAL_LISTENERS_FALLBACK_STATE_KEY = 'ebashRealListenersFallbackState';
+const REAL_LISTENERS_FALLBACK_HEARTBEAT_MS = 15 * 1000;
+const REAL_LISTENERS_FALLBACK_TTL_MS = 45 * 1000;
 const METRIKA_COUNTER_ID = 108785006;
 const METRIKA_GOAL_PLAY = 'radio_play';
 const METRIKA_GOAL_NEXT = 'radio_next';
@@ -99,6 +102,7 @@ let renderedTrackKey = '';
 let simulatedListenersNow = null;
 let realListenersOwnerMode = false;
 let realPresenceRegistered = false;
+const realListenersTabId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 let listen60GoalTimer = null;
 let listen60GoalSent = false;
 
@@ -140,6 +144,72 @@ function scheduleListen60GoalIfNeeded() {
     }, 60 * 1000);
 }
 
+function readRealListenersFallbackState() {
+    try {
+        const raw = localStorage.getItem(REAL_LISTENERS_FALLBACK_STATE_KEY);
+        if (!raw) {
+            return {};
+        }
+
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (error) {
+        console.warn('Не удалось прочитать локальный fallback счетчика:', error);
+        return {};
+    }
+}
+
+function writeRealListenersFallbackState(state) {
+    try {
+        localStorage.setItem(REAL_LISTENERS_FALLBACK_STATE_KEY, JSON.stringify(state));
+    } catch (error) {
+        console.warn('Не удалось сохранить локальный fallback счетчика:', error);
+    }
+}
+
+function cleanupStaleRealListenersFallbackState(state, now = Date.now()) {
+    let changed = false;
+
+    Object.entries(state).forEach(([tabId, ts]) => {
+        const timestamp = Number(ts);
+        if (!Number.isFinite(timestamp) || now - timestamp > REAL_LISTENERS_FALLBACK_TTL_MS) {
+            delete state[tabId];
+            changed = true;
+        }
+    });
+
+    return changed;
+}
+
+function touchRealListenersFallbackPresence() {
+    const now = Date.now();
+    const state = readRealListenersFallbackState();
+    cleanupStaleRealListenersFallbackState(state, now);
+    state[realListenersTabId] = now;
+    writeRealListenersFallbackState(state);
+}
+
+function clearRealListenersFallbackPresence() {
+    const state = readRealListenersFallbackState();
+    if (!Object.prototype.hasOwnProperty.call(state, realListenersTabId)) {
+        return;
+    }
+
+    delete state[realListenersTabId];
+    cleanupStaleRealListenersFallbackState(state);
+    writeRealListenersFallbackState(state);
+}
+
+function getLocalRealListenersFallbackCount() {
+    const state = readRealListenersFallbackState();
+    const changed = cleanupStaleRealListenersFallbackState(state);
+    if (changed) {
+        writeRealListenersFallbackState(state);
+    }
+
+    return Object.keys(state).length;
+}
+
 function updateRealListenersPresence(amount) {
     const endpoint = `https://api.countapi.xyz/update/${encodeURIComponent(REAL_LISTENERS_NAMESPACE)}/${encodeURIComponent(REAL_LISTENERS_KEY)}?amount=${amount}`;
 
@@ -157,6 +227,7 @@ function registerRealListenersPresence() {
     }
 
     realPresenceRegistered = true;
+    touchRealListenersFallbackPresence();
     updateRealListenersPresence(1);
 }
 
@@ -166,6 +237,7 @@ function unregisterRealListenersPresence() {
     }
 
     realPresenceRegistered = false;
+    clearRealListenersFallbackPresence();
     updateRealListenersPresence(-1);
 }
 
@@ -201,7 +273,8 @@ async function refreshRealListenersValue() {
     try {
         const response = await fetch(endpoint, { cache: 'no-store' });
         if (!response.ok) {
-            realListenersNow.textContent = 'реально онлайн на сайте: нет данных';
+            const fallbackValue = Math.max(1, getLocalRealListenersFallbackCount());
+            renderRealListenersValue(fallbackValue);
             return;
         }
 
@@ -209,10 +282,15 @@ async function refreshRealListenersValue() {
         const value = Number(payload?.value);
         if (Number.isFinite(value)) {
             renderRealListenersValue(value);
+            return;
         }
+
+        const fallbackValue = Math.max(1, getLocalRealListenersFallbackCount());
+        renderRealListenersValue(fallbackValue);
     } catch (error) {
         console.warn('Не удалось прочитать реальный счетчик слушателей:', error);
-        realListenersNow.textContent = 'реально онлайн на сайте: нет данных';
+        const fallbackValue = Math.max(1, getLocalRealListenersFallbackCount());
+        renderRealListenersValue(fallbackValue);
     }
 }
 
@@ -229,6 +307,10 @@ function initRealListenersCounter() {
     }
 
     registerRealListenersPresence();
+    setInterval(() => {
+        touchRealListenersFallbackPresence();
+    }, REAL_LISTENERS_FALLBACK_HEARTBEAT_MS);
+
     refreshRealListenersValue();
 
     setInterval(() => {
