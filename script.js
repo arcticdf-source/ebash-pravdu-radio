@@ -318,15 +318,6 @@ function initRealListenersCounter() {
         touchRealListenersFallbackPresence();
     }, REAL_LISTENERS_FALLBACK_HEARTBEAT_MS);
 
-    setInterval(() => {
-        if (!realListenersOwnerMode) {
-            return;
-        }
-
-        const localCount = Math.max(1, getLocalRealListenersFallbackCount());
-        renderRealListenersValue(localCount);
-    }, REAL_LISTENERS_FALLBACK_HEARTBEAT_MS);
-
     refreshRealListenersValue();
 
     setInterval(() => {
