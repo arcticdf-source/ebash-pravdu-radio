@@ -307,8 +307,24 @@ function initRealListenersCounter() {
     }
 
     registerRealListenersPresence();
+
+    // Показываем локальное значение сразу, даже если внешний API недоступен.
+    if (realListenersOwnerMode) {
+        const localCount = Math.max(1, getLocalRealListenersFallbackCount());
+        renderRealListenersValue(localCount);
+    }
+
     setInterval(() => {
         touchRealListenersFallbackPresence();
+    }, REAL_LISTENERS_FALLBACK_HEARTBEAT_MS);
+
+    setInterval(() => {
+        if (!realListenersOwnerMode) {
+            return;
+        }
+
+        const localCount = Math.max(1, getLocalRealListenersFallbackCount());
+        renderRealListenersValue(localCount);
     }, REAL_LISTENERS_FALLBACK_HEARTBEAT_MS);
 
     refreshRealListenersValue();
