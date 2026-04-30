@@ -188,10 +188,11 @@ function initRealListenersCounter() {
     const cfg = window.FIREBASE_PRESENCE_CONFIG;
 
     if (!cfg || typeof window.firebase === 'undefined') {
-        // Firebase не настроен — счётчик недоступен.
+        // Firebase не настроен — используем CounterAPI.
         if (realListenersOwnerMode) {
             realListenersNow.hidden = false;
-            realListenersNow.textContent = 'реально онлайн: Firebase не настроен';
+            realListenersNow.textContent = 'реально онлайн: загрузка...';
+            initRealtimeListenersNow();
         }
 
         return;
@@ -678,10 +679,7 @@ function getRealtimeListenersTabId() {
 function renderRealtimeListenersNow(value) {
     const normalized = Math.max(0, Number(value) || 0);
 
-    if (listenersNowCount) {
-        listenersNowCount.textContent = String(normalized);
-    }
-
+    // Симулированный публичный счётчик не трогаем — только реальный для владельца.
     if (realListenersOwnerMode) {
         renderRealListenersValue(normalized);
     }
