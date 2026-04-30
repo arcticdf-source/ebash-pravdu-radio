@@ -1408,12 +1408,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         containerSelector: '.label-inner',
         fallbackClass: 'photo-fallback',
         candidates: [
+            'assets/road.JPG',
             'assets/road.jpg',
             'assets/road.jpeg',
-            'assets/road.png',
-            'assets/road.JPG',
-            'assets/road.JPEG',
-            'assets/road.PNG'
+            'assets/road.png'
         ]
     });
 
