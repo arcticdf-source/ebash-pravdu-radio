@@ -692,6 +692,9 @@ async function refreshRealtimeListenersNow() {
         });
 
         if (!response.ok) {
+            if (realListenersOwnerMode && realListenersNow) {
+                realListenersNow.textContent = `реально онлайн: ошибка ${response.status}`;
+            }
             return;
         }
 
@@ -700,9 +703,14 @@ async function refreshRealtimeListenersNow() {
 
         if (Number.isFinite(count)) {
             renderRealtimeListenersNow(count);
+        } else if (realListenersOwnerMode && realListenersNow) {
+            realListenersNow.textContent = `реально онлайн: неверный ответ API`;
         }
     } catch (error) {
         console.warn('Не удалось получить реальный онлайн счетчик:', error);
+        if (realListenersOwnerMode && realListenersNow) {
+            realListenersNow.textContent = `реально онлайн: нет связи (${error.message})`;
+        }
     }
 }
 
