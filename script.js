@@ -1409,12 +1409,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         containerSelector: '.label-inner',
         fallbackClass: 'photo-fallback',
         candidates: [
-            'assets/pic2.jpg',
-            'assets/pic2.jpeg',
-            'assets/pic2.png',
-            'assets/pic2.JPG',
-            'assets/pic2.JPEG',
-            'assets/pic2.PNG'
+            'assets/ebash.jpg',
+            'assets/ebash.jpeg',
+            'assets/ebash.png',
+            'assets/ebash.JPG',
+            'assets/ebash.JPEG',
+            'assets/ebash.PNG'
         ]
     });
 
