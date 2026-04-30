@@ -1409,12 +1409,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         containerSelector: '.label-inner',
         fallbackClass: 'photo-fallback',
         candidates: [
-            'assets/tima-center.jpg',
-            'assets/tima-center.jpeg',
-            'assets/tima-center.png',
-            'assets/tima-center.JPG',
-            'assets/tima-center.JPEG',
-            'assets/tima-center.PNG'
+            'assets/pic2.jpg',
+            'assets/pic2.jpeg',
+            'assets/pic2.png',
+            'assets/pic2.JPG',
+            'assets/pic2.JPEG',
+            'assets/pic2.PNG'
         ]
     });
 
