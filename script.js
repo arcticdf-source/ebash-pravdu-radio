@@ -1185,7 +1185,6 @@ function loadTrack(index) {
     radioStream.src = track.file;
     hasRecordedCurrentTrackPlay = false;
     renderedTrackKey = '';
-    randomStartOffsetApplied = false;
     radioStream.load();
     updateUIForCurrentTrack();
 }
