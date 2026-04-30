@@ -1408,12 +1408,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         containerSelector: '.label-inner',
         fallbackClass: 'photo-fallback',
         candidates: [
-            'assets/duha-center.jpg',
-            'assets/duha-center.jpeg',
-            'assets/duha-center.png',
-            'assets/duha-center.JPG',
-            'assets/duha-center.JPEG',
-            'assets/duha-center.PNG'
+            'assets/road.jpg',
+            'assets/road.jpeg',
+            'assets/road.png',
+            'assets/road.JPG',
+            'assets/road.JPEG',
+            'assets/road.PNG'
         ]
     });
 
