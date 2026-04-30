@@ -81,7 +81,28 @@
     <script>
         window.DUHA_PLAYLIST_URL = 'https://storage.yandexcloud.net/duhabornagainradio/playlist.json';
     </script>
-    <script src="script.js?v=20260428-5"></script>
+
+    <!-- Firebase SDK (для счётчика реальных слушателей) -->
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
+    <!-- FIREBASE_PRESENCE_CONFIG: вставь сюда объект конфига из Firebase Console
+         Project Settings → General → Your apps → </>  (веб-приложение)
+         Пример:
+         window.FIREBASE_PRESENCE_CONFIG = {
+             apiKey: "AIzaSy...",
+             authDomain: "YOUR_PROJECT.firebaseapp.com",
+             databaseURL: "https://YOUR_PROJECT-default-rtdb.europe-west1.firebasedatabase.app",
+             projectId: "YOUR_PROJECT",
+             storageBucket: "YOUR_PROJECT.appspot.com",
+             messagingSenderId: "000000000000",
+             appId: "1:000000000000:web:xxxxxxxxxxxxxxxx"
+         };
+    -->
+    <script>
+        window.FIREBASE_PRESENCE_CONFIG = null; // <-- вставь конфиг сюда
+    </script>
+
+    <script src="script.js?v=20260430-2"></script>
 
     <!-- Yandex.Metrika counter -->
     <script type="text/javascript">

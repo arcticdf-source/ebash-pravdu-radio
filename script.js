@@ -63,6 +63,7 @@ let isPlaying = false;
 let currentTrackIndex = 0;
 let recentSongs = [];
 let hasRecordedCurrentTrackPlay = false;
+let randomStartOffsetApplied = false;
 const PLAY_HISTORY_STORAGE_KEY = 'duhaBornAgainPlayHistory';
 const BROKEN_TRACKS_STORAGE_KEY = 'duhaBornAgainBrokenTracks';
 const SESSION_RECENT_TRACKS_STORAGE_KEY = 'duhaBornAgainSessionRecentTracks';
@@ -71,24 +72,29 @@ const ARTIST_ANTI_REPEAT_DEPTH = 3;
 const PLAY_LIMIT_WINDOW_MS = 24 * 60 * 60 * 1000;
 const MAX_PLAYS_PER_TRACK_PER_WINDOW = 2;
 const PLAYLIST_REFRESH_INTERVAL_MS = 2 * 60 * 1000;
-const LISTENERS_MIN = 600;
-const LISTENERS_MAX = 1300;
-const LISTENERS_BASELINE = 950;
+const LISTENERS_MIN = 5000;
+const LISTENERS_MAX = 10000;
+const LISTENERS_BASELINE = 7500;
 const LISTENERS_UPDATE_INTERVAL_MS = 15 * 60 * 1000;
 const LISTENERS_STATE_STORAGE_KEY = 'duhaBornAgainListenersState';
-const REAL_LISTENERS_OWNER_STORAGE_KEY = 'ebashShowRealCounter';
 const REAL_LISTENERS_NAMESPACE = 'ebash-pravdu-radio';
 const REAL_LISTENERS_KEY = 'online-now';
 const REAL_LISTENERS_REFRESH_INTERVAL_MS = 20 * 1000;
-const REAL_LISTENERS_FALLBACK_STATE_KEY = 'ebashRealListenersFallbackState';
-const REAL_LISTENERS_FALLBACK_HEARTBEAT_MS = 15 * 1000;
-const REAL_LISTENERS_FALLBACK_TTL_MS = 45 * 1000;
+const REAL_LISTENERS_PRESENCE_REGISTERED_KEY = 'ebashRealPresenceRegistered';
+const REAL_LISTENERS_TAB_ID_KEY = 'ebashRealListenersTabId';
+const REAL_LISTENERS_OWNER_STORAGE_KEY = 'ebashShowRealCounter';
+const REAL_LISTENERS_SESSION_KEY = `session-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 const METRIKA_COUNTER_ID = 108785006;
 const METRIKA_GOAL_PLAY = 'radio_play';
 const METRIKA_GOAL_NEXT = 'radio_next';
 const METRIKA_GOAL_LISTEN_60S = 'radio_listen_60s';
 const PLAYLIST_URL = (window.DUHA_PLAYLIST_URL || '').trim();
 const LYRICS_API_BASE_URL = (window.DUHA_LYRICS_API_BASE_URL || '').trim();
+const RANDOM_START_MIN_OFFSET_SEC = 15;
+const RANDOM_START_TAIL_GUARD_SEC = 25;
+const RANDOM_START_MIN_DURATION_SEC = 90;
+const RANDOM_START_MIN_FRACTION = 0.2;
+const RANDOM_START_MAX_FRACTION = 0.78;
 let playHistoryByFile = loadPlayHistory();
 const brokenTrackFiles = loadBrokenTrackFiles();
 let previousSessionRecentTracks = loadPreviousSessionRecentTracks();
@@ -102,7 +108,7 @@ let renderedTrackKey = '';
 let simulatedListenersNow = null;
 let realListenersOwnerMode = false;
 let realPresenceRegistered = false;
-const realListenersTabId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+let realtimeListenersPollingTimer = null;
 let listen60GoalTimer = null;
 let listen60GoalSent = false;
 
@@ -144,103 +150,10 @@ function scheduleListen60GoalIfNeeded() {
     }, 60 * 1000);
 }
 
-function readRealListenersFallbackState() {
-    try {
-        const raw = localStorage.getItem(REAL_LISTENERS_FALLBACK_STATE_KEY);
-        if (!raw) {
-            return {};
-        }
-
-        const parsed = JSON.parse(raw);
-        return parsed && typeof parsed === 'object' ? parsed : {};
-    } catch (error) {
-        console.warn('Не удалось прочитать локальный fallback счетчика:', error);
-        return {};
-    }
-}
-
-function writeRealListenersFallbackState(state) {
-    try {
-        localStorage.setItem(REAL_LISTENERS_FALLBACK_STATE_KEY, JSON.stringify(state));
-    } catch (error) {
-        console.warn('Не удалось сохранить локальный fallback счетчика:', error);
-    }
-}
-
-function cleanupStaleRealListenersFallbackState(state, now = Date.now()) {
-    let changed = false;
-
-    Object.entries(state).forEach(([tabId, ts]) => {
-        const timestamp = Number(ts);
-        if (!Number.isFinite(timestamp) || now - timestamp > REAL_LISTENERS_FALLBACK_TTL_MS) {
-            delete state[tabId];
-            changed = true;
-        }
-    });
-
-    return changed;
-}
-
-function touchRealListenersFallbackPresence() {
-    const now = Date.now();
-    const state = readRealListenersFallbackState();
-    cleanupStaleRealListenersFallbackState(state, now);
-    state[realListenersTabId] = now;
-    writeRealListenersFallbackState(state);
-}
-
-function clearRealListenersFallbackPresence() {
-    const state = readRealListenersFallbackState();
-    if (!Object.prototype.hasOwnProperty.call(state, realListenersTabId)) {
-        return;
-    }
-
-    delete state[realListenersTabId];
-    cleanupStaleRealListenersFallbackState(state);
-    writeRealListenersFallbackState(state);
-}
-
-function getLocalRealListenersFallbackCount() {
-    const state = readRealListenersFallbackState();
-    const changed = cleanupStaleRealListenersFallbackState(state);
-    if (changed) {
-        writeRealListenersFallbackState(state);
-    }
-
-    return Object.keys(state).length;
-}
-
-function updateRealListenersPresence(amount) {
-    const direction = amount >= 0 ? 'up' : 'down';
-    const endpoint = `https://api.counterapi.dev/v1/${encodeURIComponent(REAL_LISTENERS_NAMESPACE)}/${encodeURIComponent(REAL_LISTENERS_KEY)}/${direction}`;
-
-    fetch(endpoint, {
-        cache: 'no-store',
-        keepalive: true
-    }).catch((error) => {
-        console.warn('Не удалось обновить реальный счетчик присутствия:', error);
-    });
-}
-
-function registerRealListenersPresence() {
-    if (realPresenceRegistered) {
-        return;
-    }
-
-    realPresenceRegistered = true;
-    touchRealListenersFallbackPresence();
-    updateRealListenersPresence(1);
-}
-
-function unregisterRealListenersPresence() {
-    if (!realPresenceRegistered) {
-        return;
-    }
-
-    realPresenceRegistered = false;
-    clearRealListenersFallbackPresence();
-    updateRealListenersPresence(-1);
-}
+// ===== СЧЁТЧИК РЕАЛЬНЫХ СЛУШАТЕЛЕЙ (Firebase RTDB Presence) =====
+// Каждый посетитель создаёт запись /presence/{sessionKey}.
+// Firebase автоматически удаляет её при разрыве соединения (onDisconnect),
+// поэтому счётчик не дрейфует даже при краше браузера или мобильном off.
 
 function resolveRealListenersOwnerMode() {
     const params = new URLSearchParams(window.location.search);
@@ -264,37 +177,6 @@ function renderRealListenersValue(value) {
     realListenersNow.textContent = `реально онлайн на сайте: ${Math.max(0, value)}`;
 }
 
-async function refreshRealListenersValue() {
-    if (!realListenersNow || !realListenersOwnerMode) {
-        return;
-    }
-
-    const endpoint = `https://api.counterapi.dev/v1/${encodeURIComponent(REAL_LISTENERS_NAMESPACE)}/${encodeURIComponent(REAL_LISTENERS_KEY)}`;
-
-    try {
-        const response = await fetch(endpoint, { cache: 'no-store' });
-        if (!response.ok) {
-            const fallbackValue = Math.max(1, getLocalRealListenersFallbackCount());
-            renderRealListenersValue(fallbackValue);
-            return;
-        }
-
-        const payload = await response.json();
-        const value = Number(payload?.count);
-        if (Number.isFinite(value)) {
-            renderRealListenersValue(value);
-            return;
-        }
-
-        const fallbackValue = Math.max(1, getLocalRealListenersFallbackCount());
-        renderRealListenersValue(fallbackValue);
-    } catch (error) {
-        console.warn('Не удалось прочитать реальный счетчик слушателей:', error);
-        const fallbackValue = Math.max(1, getLocalRealListenersFallbackCount());
-        renderRealListenersValue(fallbackValue);
-    }
-}
-
 function initRealListenersCounter() {
     if (!realListenersNow) {
         return;
@@ -303,30 +185,59 @@ function initRealListenersCounter() {
     realListenersOwnerMode = resolveRealListenersOwnerMode();
     realListenersNow.hidden = !realListenersOwnerMode;
 
+    const cfg = window.FIREBASE_PRESENCE_CONFIG;
+
+    if (!cfg || typeof window.firebase === 'undefined') {
+        // Firebase не настроен — счётчик недоступен.
+        if (realListenersOwnerMode) {
+            realListenersNow.hidden = false;
+            realListenersNow.textContent = 'реально онлайн: Firebase не настроен';
+        }
+
+        return;
+    }
+
     if (realListenersOwnerMode) {
+        realListenersNow.hidden = false;
         realListenersNow.textContent = 'реально онлайн на сайте: загрузка...';
     }
 
-    registerRealListenersPresence();
+    try {
+        if (!firebase.apps.length) {
+            firebase.initializeApp(cfg);
+        }
 
-    // Показываем локальное значение сразу, даже если внешний API недоступен.
-    if (realListenersOwnerMode) {
-        const localCount = Math.max(1, getLocalRealListenersFallbackCount());
-        renderRealListenersValue(localCount);
+        const db = firebase.database();
+        const presenceRef = db.ref(`presence/${REAL_LISTENERS_SESSION_KEY}`);
+        const connectedRef = db.ref('.info/connected');
+
+        // Регистрируем присутствие при подключении.
+        // onDisconnect гарантирует удаление записи на стороне Firebase
+        // даже при краше браузера, смене сети или закрытии вкладки без события.
+        connectedRef.on('value', (snap) => {
+            if (!snap.val()) {
+                return;
+            }
+
+            presenceRef.onDisconnect().remove();
+            presenceRef.set({ connectedAt: firebase.database.ServerValue.TIMESTAMP });
+            realPresenceRegistered = true;
+        });
+
+        // Показываем счётчик только владельцу (режим ?real=1).
+        if (realListenersOwnerMode) {
+            db.ref('presence').on('value', (snap) => {
+                renderRealListenersValue(snap.numChildren());
+            });
+        }
+
+    } catch (err) {
+        console.warn('Не удалось инициализировать Firebase presence:', err);
+
+        if (realListenersOwnerMode) {
+            realListenersNow.textContent = 'реально онлайн: ошибка Firebase';
+        }
     }
-
-    setInterval(() => {
-        touchRealListenersFallbackPresence();
-    }, REAL_LISTENERS_FALLBACK_HEARTBEAT_MS);
-
-    refreshRealListenersValue();
-
-    setInterval(() => {
-        refreshRealListenersValue();
-    }, REAL_LISTENERS_REFRESH_INTERVAL_MS);
-
-    window.addEventListener('beforeunload', unregisterRealListenersPresence);
-    window.addEventListener('pagehide', unregisterRealListenersPresence);
 }
 
 const fallbackMusicFiles = [
@@ -748,6 +659,105 @@ function initSimulatedListenersNow() {
     }, msUntilNextUpdate);
 }
 
+function getRealtimeListenersEndpoint(action = '') {
+    const basePath = `https://api.counterapi.dev/v1/${encodeURIComponent(REAL_LISTENERS_NAMESPACE)}/${encodeURIComponent(REAL_LISTENERS_KEY)}`;
+    return action ? `${basePath}/${action}` : basePath;
+}
+
+function getRealtimeListenersTabId() {
+    const existing = sessionStorage.getItem(REAL_LISTENERS_TAB_ID_KEY);
+    if (existing) {
+        return existing;
+    }
+
+    const generated = `tab-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    sessionStorage.setItem(REAL_LISTENERS_TAB_ID_KEY, generated);
+    return generated;
+}
+
+function renderRealtimeListenersNow(value) {
+    const normalized = Math.max(0, Number(value) || 0);
+
+    if (listenersNowCount) {
+        listenersNowCount.textContent = String(normalized);
+    }
+
+    if (realListenersOwnerMode) {
+        renderRealListenersValue(normalized);
+    }
+}
+
+async function refreshRealtimeListenersNow() {
+    try {
+        const response = await fetch(getRealtimeListenersEndpoint(), {
+            cache: 'no-store'
+        });
+
+        if (!response.ok) {
+            return;
+        }
+
+        const payload = await response.json();
+        const count = Number(payload?.count);
+
+        if (Number.isFinite(count)) {
+            renderRealtimeListenersNow(count);
+        }
+    } catch (error) {
+        console.warn('Не удалось получить реальный онлайн счетчик:', error);
+    }
+}
+
+function updateRealtimePresence(direction) {
+    const action = direction > 0 ? 'up' : 'down';
+
+    fetch(getRealtimeListenersEndpoint(action), {
+        cache: 'no-store',
+        keepalive: true
+    }).catch((error) => {
+        console.warn('Не удалось обновить присутствие в счетчике:', error);
+    });
+}
+
+function registerRealtimePresence() {
+    if (sessionStorage.getItem(REAL_LISTENERS_PRESENCE_REGISTERED_KEY) === '1') {
+        return;
+    }
+
+    getRealtimeListenersTabId();
+    sessionStorage.setItem(REAL_LISTENERS_PRESENCE_REGISTERED_KEY, '1');
+    updateRealtimePresence(1);
+}
+
+function unregisterRealtimePresence() {
+    if (sessionStorage.getItem(REAL_LISTENERS_PRESENCE_REGISTERED_KEY) !== '1') {
+        return;
+    }
+
+    sessionStorage.removeItem(REAL_LISTENERS_PRESENCE_REGISTERED_KEY);
+    updateRealtimePresence(-1);
+}
+
+function initRealtimeListenersNow() {
+    registerRealtimePresence();
+    refreshRealtimeListenersNow();
+
+    if (realtimeListenersPollingTimer) {
+        clearInterval(realtimeListenersPollingTimer);
+    }
+
+    realtimeListenersPollingTimer = setInterval(() => {
+        refreshRealtimeListenersNow();
+    }, REAL_LISTENERS_REFRESH_INTERVAL_MS);
+
+    window.addEventListener('beforeunload', unregisterRealtimePresence);
+    window.addEventListener('pagehide', unregisterRealtimePresence);
+    window.addEventListener('pageshow', () => {
+        registerRealtimePresence();
+        refreshRealtimeListenersNow();
+    });
+}
+
 function getEligibleTrackIndicesAvoidingRecentArtists(excludeIndex = null) {
     const eligible = getEligibleTrackIndices(excludeIndex);
     if (recentArtists.length === 0) {
@@ -884,6 +894,27 @@ function handlePlayError(err, options = {}) {
 
 function playWhenReady(options = {}) {
     const attemptPlay = () => {
+        // Применяем случайную стартовую позицию прямо перед воспроизведением.
+        if (!randomStartOffsetApplied && radioStream.readyState >= 2) {
+            randomStartOffsetApplied = true;
+            const duration = Number(radioStream.duration);
+            if (Number.isFinite(duration) && duration > RANDOM_START_MIN_DURATION_SEC) {
+                const minByFraction = duration * RANDOM_START_MIN_FRACTION;
+                const maxByFraction = duration * RANDOM_START_MAX_FRACTION;
+                const minOffset = Math.max(RANDOM_START_MIN_OFFSET_SEC, Math.floor(minByFraction));
+                const maxOffset = Math.min(Math.floor(maxByFraction), Math.floor(duration - RANDOM_START_TAIL_GUARD_SEC));
+
+                if (maxOffset > minOffset) {
+                    const randomOffset = getRandomInt(minOffset, maxOffset);
+                    try {
+                        radioStream.currentTime = randomOffset;
+                    } catch (error) {
+                        console.warn('Не удалось установить случайную стартовую позицию:', error);
+                    }
+                }
+            }
+        }
+
         radioStream.play().catch((err) => handlePlayError(err, options));
     };
 
@@ -1156,6 +1187,7 @@ function loadTrack(index) {
     radioStream.src = track.file;
     hasRecordedCurrentTrackPlay = false;
     renderedTrackKey = '';
+    randomStartOffsetApplied = false;
     radioStream.load();
     updateUIForCurrentTrack();
 }
